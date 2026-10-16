@@ -1,0 +1,570 @@
+library(dkstat)
+library(tidyr)
+library(ggplot2)
+
+
+#### FORV1 - FORBRUGERFORVENTNINGER
+
+#henter metadata
+forv1_meta <- dst_meta(table = "FORV1", lang = "da")
+
+#vælger de 11 spørgsmål
+spoergsmaal <- forv1_meta$values$INDIKATOR$text
+
+spoergsmaal <- spoergsmaal[
+  !grepl("Forbrugertillidsindikatoren|Anser det som fornuftigt", spoergsmaal)
+]
+
+#henter data
+forv1 <- dst_get_data(
+  table = "FORV1",
+  query = list(
+    INDIKATOR = spoergsmaal,
+    Tid = "*"
+  ),
+  meta_data = forv1_meta,
+  lang = "da",
+  parse_dst_tid = FALSE
+)
+
+#beholder januar 2000 og frem
+forv1 <- forv1[forv1$TID >= "2000M01", ]
+
+#laver spørgsmålene til kolonner
+forv1 <- pivot_wider(
+  forv1,
+  id_cols = TID,
+  names_from = INDIKATOR,
+  values_from = value
+)
+
+forv1 <- as.data.frame(forv1)
+forv1 <- forv1[order(forv1$TID), ]
+rownames(forv1) <- NULL
+
+#laver måneder til kvartaler
+maaned <- as.numeric(substr(forv1$TID, 6, 7))
+
+kvartal <- paste0(
+  substr(forv1$TID, 1, 4),
+  "K",
+  ceiling(maaned / 3)
+)
+
+#beregner gennemsnit pr. kvartal
+forv1_kvt <- aggregate(
+  forv1[, -1],
+  by = list(TID = kvartal),
+  FUN = mean
+)
+
+#vender fortegnene på f6 og f8
+vend_spg <- grep("^F(6|8) ", names(forv1_kvt))
+
+#vender fortegnene
+forv1_kvt[,vend_spg] <- -forv1_kvt[,vend_spg]
+
+#viser hvilke spørgsmål der er vendt
+names(forv1_kvt)[vend_spg]
+
+View(forv1_kvt)
+
+
+#### BEREGNER ALLE 2047 INDIKATORER
+
+#indikatorer med 1 spørgsmål
+z1 <- matrix(0, ncol = 11, nrow = nrow(forv1_kvt))
+
+for(i in 1:nrow(forv1_kvt)) {
+  z1[i,] <- as.numeric(forv1_kvt[i, 2:ncol(forv1_kvt)])
+}
+
+#indikatorer med 2 spørgsmål
+z2 <- matrix(0, ncol = 55, nrow = nrow(forv1_kvt))
+
+for(i in 1:nrow(forv1_kvt)) {
+  z2[i,] <- colMeans(combn(
+    as.numeric(forv1_kvt[i, 2:ncol(forv1_kvt)]), 2
+  ))
+}
+
+#indikatorer med 3 spørgsmål
+z3 <- matrix(0, ncol = 165, nrow = nrow(forv1_kvt))
+
+for(i in 1:nrow(forv1_kvt)) {
+  z3[i,] <- colMeans(combn(
+    as.numeric(forv1_kvt[i, 2:ncol(forv1_kvt)]), 3
+  ))
+}
+
+#indikatorer med 4 spørgsmål
+z4 <- matrix(0, ncol = 330, nrow = nrow(forv1_kvt))
+
+for(i in 1:nrow(forv1_kvt)) {
+  z4[i,] <- colMeans(combn(
+    as.numeric(forv1_kvt[i, 2:ncol(forv1_kvt)]), 4
+  ))
+}
+
+#indikatorer med 5 spørgsmål
+z5 <- matrix(0, ncol = 462, nrow = nrow(forv1_kvt))
+
+for(i in 1:nrow(forv1_kvt)) {
+  z5[i,] <- colMeans(combn(
+    as.numeric(forv1_kvt[i, 2:ncol(forv1_kvt)]), 5
+  ))
+}
+
+#indikatorer med 6 spørgsmål
+z6 <- matrix(0, ncol = 462, nrow = nrow(forv1_kvt))
+
+for(i in 1:nrow(forv1_kvt)) {
+  z6[i,] <- colMeans(combn(
+    as.numeric(forv1_kvt[i, 2:ncol(forv1_kvt)]), 6
+  ))
+}
+
+#indikatorer med 7 spørgsmål
+z7 <- matrix(0, ncol = 330, nrow = nrow(forv1_kvt))
+
+for(i in 1:nrow(forv1_kvt)) {
+  z7[i,] <- colMeans(combn(
+    as.numeric(forv1_kvt[i, 2:ncol(forv1_kvt)]), 7
+  ))
+}
+
+#indikatorer med 8 spørgsmål
+z8 <- matrix(0, ncol = 165, nrow = nrow(forv1_kvt))
+
+for(i in 1:nrow(forv1_kvt)) {
+  z8[i,] <- colMeans(combn(
+    as.numeric(forv1_kvt[i, 2:ncol(forv1_kvt)]), 8
+  ))
+}
+
+#indikatorer med 9 spørgsmål
+z9 <- matrix(0, ncol = 55, nrow = nrow(forv1_kvt))
+
+for(i in 1:nrow(forv1_kvt)) {
+  z9[i,] <- colMeans(combn(
+    as.numeric(forv1_kvt[i, 2:ncol(forv1_kvt)]), 9
+  ))
+}
+
+#indikatorer med 10 spørgsmål
+z10 <- matrix(0, ncol = 11, nrow = nrow(forv1_kvt))
+
+for(i in 1:nrow(forv1_kvt)) {
+  z10[i,] <- colMeans(combn(
+    as.numeric(forv1_kvt[i, 2:ncol(forv1_kvt)]), 10
+  ))
+}
+
+#indikatoren med alle 11 spørgsmål
+z11 <- matrix(0, ncol = 1, nrow = nrow(forv1_kvt))
+
+for(i in 1:nrow(forv1_kvt)) {
+  z11[i,] <- mean(as.numeric(forv1_kvt[i, 2:ncol(forv1_kvt)]))
+}
+
+#samler alle indikatorer i én matrix
+zALLE <- cbind(z1, z2, z3, z4, z5, z6, z7, z8, z9, z10, z11)
+
+#giver indikatorerne navne fra x1 til x2047
+colnames(zALLE) <- paste0("X", 1:2047)
+
+#tilføjer kvartalerne som første kolonne
+zALLE <- data.frame(
+  TID = forv1_kvt$TID,
+  zALLE
+)
+
+#kontrollerer antal indikatorer
+stopifnot(ncol(zALLE) == 2048)
+
+View(zALLE)
+
+
+#### NKN1 - HUSHOLDNINGERNES PRIVATFORBRUG
+
+#henter metadata
+privatforbrug_meta <- dst_meta("NKN1", lang = "da")
+
+variable <- privatforbrug_meta$variables
+
+ids <- variable$id[match(
+  c("transaktion", "prisenhed", "sæsonkorrigering", "tid"),
+  tolower(trimws(variable$text))
+)]
+
+stopifnot(!anyNA(ids))
+
+#henter sæsonkorrigeret forbrug i kædede 2020-priser
+privatforbrug_filters <- setNames(
+  list(
+    "P.31 Husholdningernes forbrugsudgifter",
+    "2020-priser, kædede værdier, (mia. kr.)",
+    "Sæsonkorrigeret",
+    "*"
+  ),
+  ids
+)
+
+privatforbrug_raw <- dst_get_data(
+  table = "NKN1",
+  query = privatforbrug_filters,
+  meta_data = privatforbrug_meta,
+  lang = "da",
+  parse_dst_tid = FALSE
+)
+
+#vælger perioden fra 1999k1
+privatforbrug_raw <- privatforbrug_raw[
+  privatforbrug_raw$TID >= "1999K1",
+]
+
+#sorterer kvartalerne
+privatforbrug_raw <- privatforbrug_raw[
+  order(privatforbrug_raw$TID),
+]
+
+#opretter dataframe
+privatforbrug <- data.frame(
+  Tidsinterval = as.character(privatforbrug_raw$TID),
+  Privatforbrug = privatforbrug_raw$value
+)
+
+#kontrollerer at der ikke mangler kvartaler
+kvartalsnummer <- as.integer(
+  substr(privatforbrug$Tidsinterval, 1, 4)
+) * 4 +
+  as.integer(substr(privatforbrug$Tidsinterval, 6, 6))
+
+stopifnot(
+  nrow(privatforbrug) > 4,
+  all(diff(kvartalsnummer) == 1)
+)
+
+#beregner årlig realvækst i forhold til samme kvartal året før
+privatforbrug$Realvaekst <- c(
+  rep(NA, 4),
+  (
+    privatforbrug$Privatforbrug[5:nrow(privatforbrug)] /
+      privatforbrug$Privatforbrug[1:(nrow(privatforbrug) - 4)] - 1
+  ) * 100
+)
+
+View(privatforbrug)
+
+
+#### REGRESSIONER FOR ALLE 2047 INDIKATORER
+
+#samler forbrugsvækst og indikatorer
+regressionsdata <- merge(
+  privatforbrug,
+  zALLE,
+  by.x = "Tidsinterval",
+  by.y = "TID"
+)
+
+#finder de 2047 indikatorer
+indikatorer <- names(zALLE)[-1]
+
+#kontrollerer datagrundlaget
+dim(regressionsdata)
+
+stopifnot(length(indikatorer) == 2047)
+
+stopifnot(
+  !anyNA(regressionsdata[, c("Realvaekst", indikatorer)])
+)
+
+#opretter en tabel til resultater
+resultater <- data.frame(
+  indikator = indikatorer,
+  R2 = NA_real_,
+  koefficient = NA_real_,
+  p_vaerdi = NA_real_
+)
+
+#beregner en lineær regression for hver indikator
+for(i in 1:length(indikatorer)) {
+  
+  x <- regressionsdata[[indikatorer[i]]]
+  
+  model <- lm(regressionsdata$Realvaekst ~ x)
+  
+  resultater$R2[i] <- summary(model)$r.squared
+  resultater$koefficient[i] <- coef(model)[2]
+  resultater$p_vaerdi[i] <- summary(model)$coefficients[2,4]
+}
+
+#sorterer efter højeste r2
+resultater <- resultater[order(-resultater$R2), ]
+
+#viser de 10 bedste
+print(head(resultater, 10))
+
+View(resultater)
+
+
+#### FINDER DEN BEDSTE MODEL
+
+#finder automatisk indikatoren med højeste r2
+bedste_navn <- resultater$indikator[1]
+
+#beregner den bedste regression
+bedste_model <- lm(
+  reformulate(bedste_navn, response = "Realvaekst"),
+  data = regressionsdata
+)
+
+#viser regressionsresultatet
+print(summary(bedste_model))
+
+
+#### FINDER SPØRGSMÅLENE BAG INDIKATORERNE
+
+#finder spørgsmålene bag et x-nummer
+find_spg <- function(n) {
+  
+  antal <- choose(11, 1:11)
+  
+  k <- which(n <= cumsum(antal))[1]
+  
+  placering <- n - sum(antal[1:11 < k])
+  
+  paste(
+    sub(" .*", "", combn(names(forv1_kvt)[-1], k)[, placering]),
+    collapse = ", "
+  )
+}
+
+#tilføjer spørgsmålene til regressionsresultaterne
+resultater$Spoergsmaal <- sapply(
+  as.numeric(sub("X", "", resultater$indikator)),
+  find_spg
+)
+
+#viser hvilken indikator der er bedst
+cat("Bedste indikator:", bedste_navn, "\n")
+
+#viser spørgsmålene i den bedste indikator
+cat(
+  "Spørgsmål:",
+  resultater$Spoergsmaal[1],
+  "\n"
+)
+
+
+#### TOP 10, TOP 50 OG TOP 100
+
+#opretter tabellerne
+top10 <- head(resultater, 10)
+top50 <- head(resultater, 50)
+top100 <- head(resultater, 100)
+
+#viser top 10
+print(top10)
+
+View(top10)
+View(top50)
+View(top100)
+
+
+#### SPØRGSMÅLSHYPPIGHED I TOP 100
+
+#tæller hvor ofte hvert spørgsmål optræder
+hyppighed100 <- sort(
+  table(
+    unlist(strsplit(top100$Spoergsmaal, ", "))
+  ),
+  decreasing = TRUE
+)
+
+#opretter en tabel med antal
+hyppighed100 <- data.frame(
+  Spoergsmaal = names(hyppighed100),
+  Antal = as.vector(hyppighed100)
+)
+
+#viser hyppigheden
+print(hyppighed100)
+
+View(hyppighed100)
+
+
+#### SIDSTE KONTROL
+
+#kontrollerer at de rigtige spørgsmål er vendt
+print(names(forv1_kvt)[vend_spg])
+
+#kontrollerer at vi har 2047 indikatorer
+print(length(indikatorer))
+
+#kontrollerer at ingen regressioner mangler r2
+print(sum(is.na(resultater$R2)))
+
+#kontrollerer at regressionsdata bruger de nye værdier
+print(all.equal(
+  as.numeric(regressionsdata$X1806),
+  as.numeric(zALLE$X1806[
+    match(regressionsdata$Tidsinterval, zALLE$TID)
+  ])
+))
+
+
+####finder den bedste mikroøkonomiske indikator
+
+#vælger de mikroøkonomiske spørgsmål
+mikro_spg <- c("F2", "F3", "F9", "F10", "F12", "F13")
+
+#finder indikatorer der kun indeholder mikrospørgsmål
+mikro_resultater <- resultater[
+  sapply(strsplit(resultater$Spoergsmaal, ", "), function(x) {
+    all(x %in% mikro_spg)
+  }),
+]
+
+#viser de 10 bedste mikroøkonomiske indikatorer
+top10_mikro <- head(mikro_resultater, 10)
+
+print(top10_mikro)
+View(top10_mikro)
+
+####stabilitetstest med fem perioder (CHOPCHOP af fem perioder på ca. 5år og 3måneder)
+
+#sorterer data efter kvartal
+stabilitetsdata <- regressionsdata[
+  order(regressionsdata$Tidsinterval), 
+]
+
+#fordeler 106 kvartaler på fem perioder
+periode <- rep(1:5, c(21,21,21,21,22))
+
+#kontrollerer datagrundlaget
+stopifnot(nrow(stabilitetsdata) == 106)
+
+#opretter en tabel til resultaterne
+stabilitet <- data.frame(
+  indikator = indikatorer,
+  P1 = NA_real_,
+  P2 = NA_real_,
+  P3 = NA_real_,
+  P4 = NA_real_,
+  P5 = NA_real_
+)
+#tilføjer spørgsmålene til stabilitetsmatrixen
+stabilitet$Spoergsmaal <- resultater$Spoergsmaal[
+  match(stabilitet$indikator, resultater$indikator)
+]
+#beregner r2 for alle indikatorer i hver periode
+for(p in 1:5) {
+  
+  data_periode <- stabilitetsdata[periode == p, ]
+  
+  for(i in 1:length(indikatorer)) {
+    
+    x <- data_periode[[indikatorer[i]]]
+    
+    model <- lm(data_periode$Realvaekst ~ x)
+    
+    stabilitet[i,p+1] <- summary(model)$r.squared
+  }
+}
+
+#beregner gennemsnitlig r2
+stabilitet$Gennemsnit_R2 <- rowMeans(stabilitet[,2:6])
+
+#beregner den laveste r2
+stabilitet$Laveste_R2 <- apply(stabilitet[,2:6],1,min)
+
+#beregner standardafvigelsen
+stabilitet$SD_R2 <- apply(stabilitet[,2:6],1,sd)
+
+#sorterer efter højeste gennemsnitlige r2
+stabilitet <- stabilitet[order(-stabilitet$Gennemsnit_R2), ]
+
+#viser de 10 bedste indikatorer
+print(head(stabilitet,10))
+
+#viser hele tabellen
+View(stabilitet)
+
+
+
+
+
+
+
+
+
+#finder de tre oprindelige spørgsmål
+spg <- grep("^F(6|7|8) ", names(forv1))
+
+#beregner de oprindelige kvartalsgennemsnit
+sp <- aggregate(
+  forv1[,spg],
+  by = list(TID = kvartal),
+  FUN = mean
+)
+
+#samler spørgsmålene med realvæksten
+kontrol <- merge(
+  sp,
+  privatforbrug,
+  by.x = "TID",
+  by.y = "Tidsinterval"
+)
+
+#viser korrelationen med forbruget
+round(cor(kontrol[,2:4], kontrol$Realvaekst), 3)
+
+
+#### TOP 10, TOP 50 OG TOP 100
+
+#opretter tabellerne
+top10stabil <- head(stabilitet, 10)
+top50stabil <- head(stabilitet, 50)
+top100stabil <- head(stabilitet, 100)
+
+
+#### SPØRGSMÅLSHYPPIGHED I TOP 100
+
+#tæller hvor ofte hvert spørgsmål optræder
+hyppighed100stabil <- sort(
+  table(
+    unlist(strsplit(top100stabil$Spoergsmaal, ", "))
+  ),
+  decreasing = TRUE
+)
+#opretter en tabel med antal
+hyppighed100stabil <- data.frame(
+  Spoergsmaal = names(hyppighed100stabil),
+  Antal = as.vector(hyppighed100stabil)
+)
+
+top100
+
+print(top10_mikro)
+
+
+#kontrollerer antal indikatorer
+ncol(zALLE) - 1
+
+#kontrollerer antal kvartaler
+nrow(regressionsdata)
+
+#viser første og sidste kvartal
+range(regressionsdata$Tidsinterval)
+
+#viser de ti bedste indikatorer
+print(top10)
+
+
+
+#viser stabiliteten for x1450
+stabilitet[stabilitet$indikator == "X1450", ]
+
+#finder x1450's placering i stabilitetsranglisten
+which(stabilitet$indikator == "X1450")
