@@ -1,0 +1,299 @@
+library(dkstat)
+library(tidyr)
+
+forv1_meta <- dst_meta(table = "FORV1", lang = "da")
+
+#---------------------------------------------------
+# Vælg alle spørgsmål undtagen to
+#---------------------------------------------------
+spoergsmaal <- forv1_meta$values$INDIKATOR$text
+
+spoergsmaal <- spoergsmaal[
+  !grepl("Forbrugertillidsindikatoren|Anser det som fornuftigt", spoergsmaal)
+]
+
+forv1 <- dst_get_data(
+  table = "FORV1",
+  query = list(
+    INDIKATOR = spoergsmaal,
+    Tid = "*"
+  ),
+  meta_data = forv1_meta,
+  lang = "da",
+  parse_dst_tid = FALSE
+)
+
+#---------------------------------------------------
+# Behold januar 2000 og frem
+#---------------------------------------------------
+
+forv1 <- forv1[forv1$TID >= "2000M01", ]
+
+#---------------------------------------------------
+# Lav spørgsmålene til kolonner
+#---------------------------------------------------
+forv1 <- pivot_wider(
+  forv1,
+  id_cols = TID,
+  names_from = INDIKATOR,
+  values_from = value
+)
+
+forv1 <- as.data.frame(forv1)
+forv1 <- forv1[order(forv1$TID), ]
+rownames(forv1) <- NULL
+
+View(forv1)
+
+#---------------------------------------------------
+# Lav måneder til kvartaler
+#---------------------------------------------------
+maaned <- as.numeric(substr(forv1$TID, 6, 7))
+
+kvartal <- paste0(
+  substr(forv1$TID, 1, 4),
+  "K",
+  ceiling(maaned / 3)
+)
+
+#---------------------------------------------------
+# Beregn gennemsnit pr. kvartal
+#---------------------------------------------------
+forv1_kvt <- aggregate(
+  forv1[, -1],
+  by = list(TID = kvartal),
+  FUN = mean
+)
+
+View(forv1_kvt)
+
+forv1_kvt[, 7:9] <- -forv1_kvt[, 7:9]
+
+x <- combn(forv1_kvt[1,2:ncol(forv1_kvt)],2)
+forv1_kvt[1,2:ncol(forv1_kvt)]
+
+x1 <- combn(forv1_kvt[2,2:ncol(forv1_kvt)],2)
+
+x3 <- matrix(as.numeric(combn(forv1_kvt[1,2:ncol(forv1_kvt)],3)),nrow=3) 
+
+x2 <- matrix(colMeans(matrix(as.numeric(combn(forv1_kvt[3,2:ncol(forv1_kvt)],3)),
+                             nrow=3)),nrow=1)
+
+#---------------------------------------------------
+#Lav tomt datasæt
+#---------------------------------------------------
+z <- matrix(0, ncol = 2047, nrow = nrow(forv1_kvt))
+
+#loop
+for(i in 1:nrow(forv1_kvt)) {
+  x <- c()
+  
+  for(k in 1:11) {
+    x <- c(x, matrix(colMeans(matrix(as.numeric(combn(forv1_kvt[i,2:ncol(forv1_kvt)],k)),nrow=k)),nrow=1))
+  }
+  
+  z[i,] <- x
+}
+
+z <- round(z,2)
+
+View(z)
+
+dim(z)
+
+
+
+
+
+# --------------------------------------------------
+# Hent privatforbrug
+# --------------------------------------------------
+privatforbrug_raw <- dst_get_data(
+  table = "NKN1",
+  query = list(
+    TRANSAKT = "P.31 Privatforbrug",
+    PRISENHED = "2020-priser, kædede værdier, (mia. kr.)",
+    SÆSON = "Sæsonkorrigeret",
+    TID = "*"
+  ),
+  lang = "da",
+  parse_dst_tid = FALSE
+)
+
+# --------------------------------------------------
+# Behold 1999 og frem, og sortér kvartalerne
+# --------------------------------------------------
+privatforbrug <- data.frame(
+  Tidsinterval = privatforbrug_raw$TID,
+  Privatforbrug = as.numeric(privatforbrug_raw$value)
+)
+
+privatforbrug <- privatforbrug[privatforbrug$Tidsinterval >= "1999K1", ]
+privatforbrug <- privatforbrug[order(privatforbrug$Tidsinterval), ]
+
+# --------------------------------------------------
+# Beregn årlig realvækst
+# --------------------------------------------------
+privatforbrug$Realvaekst <- c(
+  rep(NA, 4),
+  (
+    privatforbrug$Privatforbrug[5:nrow(privatforbrug)] /
+      privatforbrug$Privatforbrug[1:(nrow(privatforbrug) - 4)] - 1
+  ) * 100
+)
+
+# --------------------------------------------------
+# Saml realvækst og indikatorer efter kvartal
+# --------------------------------------------------
+samlet <- merge(
+  data.frame(Tidsinterval = forv1_kvt$TID, z),
+  privatforbrug[, c("Tidsinterval", "Realvaekst")],
+  by = "Tidsinterval"
+)
+
+samlet <- samlet[complete.cases(samlet), ]
+
+# --------------------------------------------------
+# Beregn R² for hver indikator
+# --------------------------------------------------
+r2 <- numeric(ncol(z))
+coef <- numeric(ncol(z))
+p_vaerdi <- numeric(ncol(z))
+
+for(i in 1:ncol(z)) {
+  model <- lm(samlet$Realvaekst ~ samlet[[i + 1]])
+  r2[i] <- summary(model)$r.squared
+  coef[i] <- summary(model)$coefficients[2, 1]
+  p_vaerdi[i] <- summary(model)$coefficients[2, 4]
+}
+
+View(samlet)
+# --------------------------------------------------
+# Find spørgsmålene i hver indikator
+# --------------------------------------------------
+names(forv1)
+forv1_meta$values$INDIKATOR
+
+spoergsmaal <- sub(" .*", "", names(forv1)[-1])
+
+x <- c()
+
+for(k in 1:11) {
+  x <- c(x, combn(spoergsmaal, k, FUN = paste, collapse = "+"))
+}
+# --------------------------------------------------
+# Saml resultaterne, og sortér bedste indikator øverst
+# --------------------------------------------------
+r2_resultater <- data.frame(
+  Indikator = paste0("V", 1:ncol(z)),
+  R2 = r2,
+  Spoergsmaal = x,
+  Coef = coef,
+  P_vaerdi = p_vaerdi
+)
+
+r2_resultater <- r2_resultater[order(r2_resultater$R2, decreasing = TRUE), ]
+r2_resultater$R2 <- round(r2_resultater$R2, 4)
+
+r2_resultater$Signifikant <- ifelse(r2_resultater$P_vaerdi < 0.05, "*", "")
+r2_resultater$P_vaerdi <- formatC(r2_resultater$P_vaerdi, format = "f", digits = 4)
+View(r2_resultater)
+
+View(r2_resultater)
+
+top10 <- head(r2_resultater, 10)
+View(top10)
+
+top100 <- head(r2_resultater, 100)
+View(top100)
+
+sort(table(unlist(strsplit(top100$Spoergsmaal, "+", fixed = TRUE))), decreasing = TRUE)
+
+
+stabilitet_resultater <- data.frame(
+  Indikator = colnames(r2_stabilitet),
+  R2 = r2_stabilitet["Gennemsnit", ],
+  Spoergsmaal = x,
+  Standardafvigelse = r2_stabilitet["Standardafvigelse", ]
+)
+
+stabilitet_resultater <- stabilitet_resultater[
+  order(stabilitet_resultater$R2, decreasing = TRUE),
+]
+
+top10st <- head(stabilitet_resultater, 10)
+
+View(top10st)
+
+top100st <- head(stabilitet_resultater, 100)
+
+View(top100st)
+sort(table(unlist(strsplit(top100st$Spoergsmaal, "+", fixed = TRUE))), decreasing = TRUE)
+
+#---------------------------------------------
+# Saml spørgsmål og realvækst efter kvartal
+#---------------------------------------------
+multipel_data <- merge(
+  forv1_kvt,
+  privatforbrug[, c("Tidsinterval", "Realvaekst")],
+  by.x = "TID",
+  by.y = "Tidsinterval"
+)
+
+multipel_data <- multipel_data[
+  multipel_data$TID >= "2000K1" &
+    multipel_data$TID <= "2026K2",
+]
+
+#---------------------------------------------
+# Fjern tidskolonnen
+#---------------------------------------------
+multipel_data$TID <- NULL
+
+#-----------------------------------------------
+# Multipel lineær regression med alle spørgsmål
+#-----------------------------------------------
+model_multipel <- lm(Realvaekst ~ ., data = multipel_data)
+
+summary(model_multipel)
+
+install.packages("pls")
+
+library(pls)
+
+# Vælg de fem spørgsmål og realvæksten
+pca_data <- multipel_data[, c(
+  "Realvaekst",
+  names(multipel_data)[grepl("^F[23459] ", names(multipel_data))]
+)]
+
+pca_data <- na.omit(pca_data)
+
+# PCA-regression som på sliden
+set.seed(123)
+
+pcr.fit <- pcr(
+  Realvaekst ~ .,
+  data = pca_data,
+  scale = TRUE,
+  validation = "CV"
+)
+
+summary(pcr.fit)
+
+# Loadings på første komponent
+loadings1 <- as.matrix(pcr.fit$loadings)[, 1]
+
+# Kvadrerede loadings som procentandele
+pca_resultater <- data.frame(
+  Spoergsmaal = names(loadings1),
+  Loading = loadings1,
+  Vaegt_procent = 100 * loadings1^2
+)
+
+# Sortér største vægt øverst
+pca_resultater <- pca_resultater[
+  order(pca_resultater$Vaegt_procent, decreasing = TRUE),
+]
+
+View(pca_resultater)
