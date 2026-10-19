@@ -13,14 +13,14 @@ pca_data <- na.omit(multipel_data)
 # PCA-regression
 set.seed(123)
 
-pcr.fit <- pcr(
+pcr.fit11 <- pcr(
   Realvaekst ~ .,
   data = pca_data,
   scale = TRUE,
   validation = "CV"
 )
 
-summary(pcr.fit)
+summary(pcr.fit11)
 
 # Loadings på første komponent
 loadings1 <- as.matrix(pcr.fit$loadings)[, 1]
